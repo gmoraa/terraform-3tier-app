@@ -1,0 +1,53 @@
+variables:
+  DOCKER_REGISTRY: $ECR_REGISTRY
+  AWS_DEFAULT_REGION: $REGION
+  DOCKER_HOST: tcp://docker:2375
+
+stages:
+  - build
+  - deploy
+
+API-ECR:
+  stage: build
+  image: 
+    name: amazon/aws-cli
+    entrypoint: [""]
+  services:
+    - docker:dind
+  before_script:
+    - cd api/
+    - amazon-linux-extras install docker
+  script:
+    - docker build -t $DOCKER_REGISTRY/api:$CI_PIPELINE_IID . 
+    - aws ecr get-login-password | docker login --username AWS --password-stdin $DOCKER_REGISTRY
+    - docker push $DOCKER_REGISTRY/api:$CI_PIPELINE_IID
+
+WEB-ECR:
+  stage: build
+  image: 
+    name: amazon/aws-cli
+    entrypoint: [""]
+  services:
+    - docker:dind
+  before_script:
+    - cd web/
+    - amazon-linux-extras install docker
+  script:
+    - docker build -t $DOCKER_REGISTRY/web:$CI_PIPELINE_IID . 
+    - aws ecr get-login-password | docker login --username AWS --password-stdin $DOCKER_REGISTRY
+    - docker push $DOCKER_REGISTRY/web:$CI_PIPELINE_IID
+
+TERRAFORM:
+  stage: deploy
+  image:
+    name: hashicorp/terraform
+    entrypoint:
+      - '/usr/bin/env'
+      - 'PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'
+  before_script:
+    - export TF_VAR_aws_access_key=$AWS_ACCESS_KEY_ID
+    - export TF_VAR_aws_secret_key=$AWS_SECRET_ACCESS_KEY
+    - cd terraform/
+    - terraform init
+  script:
+    - terraform apply -auto-approve
